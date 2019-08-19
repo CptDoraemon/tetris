@@ -1,0 +1,342 @@
+<html>
+<head>
+	<style type="text/css">
+		body {
+			width: 100vw;
+			max-width: 100%;
+			height: 100vh;
+			overflow: hidden;
+		}
+		.wrapper {
+			width: 100%;
+			height: 100%;
+			display: flex;
+			flex-direction: row;
+			align-items: center;
+			justify-content: center;
+		}
+		.playground {
+			border: solid 2px rgb(200, 200, 200);
+			display: flex;
+			flex-wrap: wrap;
+			flex-direction: row;
+			align-items: center;
+			justify-content: center;
+		}
+		.block {
+			background-color: grey;
+			opacity: 0.1;
+		}
+	</style>
+</head>
+<body>
+	<div class="wrapper">
+		<div id="playground" class="playground">
+		</div>
+	</div>
+<script type="text/javascript">
+	window.onload = main;
+
+	function main() {
+		const layout = getLayout();
+		initiatePlayground(layout);
+		const game = new Game(layout);
+		game.play();
+	}
+
+	function getLayout() {
+		const dimensionX = 10;
+		const dimensionY = 15;
+		const blockPadding = 1;
+		const height = window.innerHeight * 0.8;
+		const blockSize = height / dimensionY - 2 * blockPadding;
+		const width = (blockSize + 2 * blockPadding) * dimensionX;
+
+		return {
+			blockSize: blockSize,
+			width: width,
+			height: height,
+			blockPadding: blockPadding,
+			dimensionX: dimensionX,
+			dimensionY: dimensionY
+		}
+	}
+
+	function initiatePlayground(layout) {
+		const playground = document.getElementById('playground');
+		playground.style.width = layout.width;
+		playground.style.height = layout.height;
+
+		for (let y = 0; y < layout.dimensionY; y++) {
+			for (let x = 0; x < layout.dimensionX; x++) {
+				const block = document.createElement('div');
+				block.id = `(${x},${y})`;
+				block.style.width = layout.blockSize;
+				block.style.height = layout.blockSize;
+				block.style.margin = `${layout.blockPadding}px`;
+				block.className = 'block';
+
+				playground.appendChild(block);
+			}
+		}
+	}
+
+	class Game {
+		constructor(layout) {
+			this.layout = layout;
+			this.state = [];
+			this.prevState = [];
+			this.currentBlock = {
+				x: 0,
+				y: 0,
+				blockType: 0,
+				direction: 0
+			};
+			this.timeout = null;
+			this.score = 0;
+			//
+			this.moveDown = this.moveDown.bind(this);
+			this.play = this.play.bind(this);
+			this.keydownHandler = this.keydownHandler.bind(this);
+		}
+
+		initState() {
+			for (let y=0; y<this.layout.dimensionY; y++) {
+				this.state.push([]);
+				this.prevState.push([]);
+				for (let x=0; x<this.layout.dimensionX; x++) {
+					this.state[y].push(0);
+					this.prevState[y].push(0);
+				}
+			}
+		}
+
+		newBlock() {
+			this.currentBlock.x = Math.floor(this.layout.dimensionX * 0.5);
+			this.currentBlock.y = 0;
+			this.currentBlock.blockType = Math.floor(Math.random() * 4);
+			this.currentBlock.direction = 0;
+
+			this.moveDown();
+		}
+
+		getBlockCoords(x, y, blockType, direction) {
+			// right => x+
+			// down => y+
+			if (blockType === 0) {
+				// square
+				return [[x, y], [x+1, y], [x, y-1], [x+1, y-1]];
+			} else if (blockType === 1) {
+				// line
+				if (direction === 0 || direction === 2) {
+					return [[x, y], [x-1, y], [x+1, y], [x+2, y]];
+				} else if (direction === 1 || direction === 3) {
+					return [[x, y], [x, y-1], [x, y+1], [x, y+2]];
+				}
+			} else if (blockType === 2) {
+				// T
+				if (direction === 0) {
+					return [[x, y], [x-1, y], [x+1, y], [x, y-1]];
+				} else if (direction === 1) {
+					return [[x, y], [x+1, y], [x, y-1], [x, y+1]];
+				} else if (direction === 2) {
+					return [[x, y], [x-1, y], [x+1, y], [x, y+1]];
+				} else if (direction === 3) {
+					return [[x, y], [x-1, y], [x, y+1], [x, y-1]];
+				}
+			} else if (blockType === 3) {
+				// _|-
+				if (direction === 0 || direction === 2) {
+					return [[x, y], [x-1, y], [x, y-1], [x+1, y-1]];
+				} else if (direction === 1 || direction === 3) {
+					return [[x, y], [x, y-1], [x+1, y], [x+1, y+1]];
+				}
+			} else if (blockType === 3) {
+				// -|_
+				if (direction === 0 || direction === 2) {
+					return [[x, y], [x+1, y], [x, y-1], [x-1, y-1]];
+				} else if (direction === 1 || direction === 3) {
+					return [[x, y], [x, y+1], [x+1, y], [x+1, y-1]];
+				}
+			}
+		}
+
+		setState(newState) {
+			const prevState = this.copyDeepArray(this.prevState);
+			this.prevState = this.copyDeepArray(this.state);
+			this.state = this.copyDeepArray(newState);
+
+			for (let y = 0; y < this.layout.dimensionY; y++) {
+				for (let x = 0; x < this.layout.dimensionX; x++) {
+					// if (prevState[y][x] !== newState[y][x]) {
+						document.getElementById(`(${x},${y})`).style.opacity = 
+						(newState[y][x] === 1 || newState[y][x] === 2) ? 
+						0.8 : 0.1;
+					// }
+				}
+			}
+		}
+
+		bulkModifyStateArray(oldArray, targetValue, newValue) {
+			const newArray = this.copyDeepArray(oldArray);
+			for (let y = 0; y < this.layout.dimensionY; y++) {
+				for (let x = 0; x < this.layout.dimensionX; x++) {
+					if (newArray[y][x] === targetValue) newArray[y][x] = newValue;
+				}
+			}
+			return newArray;
+		}
+
+		checkIfBlockStop(stateArray, blockCoordsArray) {
+			let isStopped = false;
+			const stateArrayClone = this.copyDeepArray(stateArray);
+			(() => {
+				for (let i=0; i<blockCoordsArray.length; i++) {
+					const x = blockCoordsArray[i][0];
+					const y = blockCoordsArray[i][1];
+					if (y < 0) {
+						// don't check the block whick was just created
+					} else if (y >= this.layout.dimensionY) {
+						// reach bottom
+						isStopped = true;
+						return;
+					} else if (stateArrayClone[y][x] === 1) {
+						// on top of another block
+						isStopped = true;
+						return;
+					} else if (x >= this.layout.dimensionX || x < 0) {
+						// horizontally out of border
+						isStopped = true;
+						return;
+					}
+				}
+			})();
+			return isStopped;
+		}
+
+		copyDeepArray(array) {
+			const copiedArray = [];
+			array.map(arr => copiedArray.push(arr.slice()));
+			return copiedArray;
+		}
+
+		isLastRowFull() {
+			let isFull = true;
+			this.state[this.state.length - 1].map(i => {
+				if (i === 0) isFull = false;
+				return
+			});
+			return isFull;
+		}
+
+		checkIfScore() {
+			if(this.isLastRowFull()) {
+				const state = this.copyDeepArray(this.state);
+				state.pop();
+				state.unshift([]);
+				for (let i=0; i<this.layout.dimensionX; i++) {
+					state[0].push(0);
+				}
+				this.setState(state);
+				this.score++;
+				console.log(this.score);
+				this.checkIfScore();
+			}
+		}
+
+		gameover() {
+			const isReload = confirm(`Game Over! Final score: ${this.score}. Press OK to restart.`);
+			if (isReload) {
+				window.location.reload();
+			}
+		}
+
+		moveDown() {
+			let pendingState = this.copyDeepArray(this.state);
+			const blockCoordsArray = this.getBlockCoords(this.currentBlock.x, this.currentBlock.y, this.currentBlock.blockType, this.currentBlock.direction);
+			pendingState = this.bulkModifyStateArray(pendingState, 2, 0);
+			const isStopped = this.checkIfBlockStop(pendingState, blockCoordsArray);
+
+
+			if (isStopped) {
+				if (this.currentBlock.y === 0) {
+					this.gameover();
+				} else {
+					let rollbackState = this.copyDeepArray(this.state);
+					rollbackState = this.bulkModifyStateArray(rollbackState, 2, 1);
+					this.setState(rollbackState);
+					this.checkIfScore();
+					this.newBlock();
+				}
+			} else {
+				for (let i=0; i<blockCoordsArray.length; i++) {
+					const x = blockCoordsArray[i][0];
+					const y = blockCoordsArray[i][1];
+					if (y >= 0) pendingState[y][x] = 2;
+				}
+				this.setState(pendingState);
+				this.currentBlock.y++;
+				this.timeout = setTimeout(this.moveDown, 1000);
+			}
+
+		}
+
+		moveHorizontally(unit) {
+			let state = this.copyDeepArray(this.state);
+			state = this.bulkModifyStateArray(state, 2, 0);
+			const blockCoordsArray = this.getBlockCoords(this.currentBlock.x + unit, this.currentBlock.y, this.currentBlock.blockType, this.currentBlock.direction);
+			const isMovePossible = !this.checkIfBlockStop(state, blockCoordsArray);
+			if (isMovePossible) {
+				this.currentBlock.x += unit;
+				for (let i=0; i<blockCoordsArray.length; i++) {
+					const x = blockCoordsArray[i][0];
+					const y = blockCoordsArray[i][1];
+					if (y >= 0) state[y][x] = 2;
+				}
+				this.setState(state);
+			}
+		}
+
+		rotate() {
+			const newDirection = this.currentBlock.direction === 3 ? 0 : this.currentBlock.direction + 1;
+			let state = this.copyDeepArray(this.state);
+			state = this.bulkModifyStateArray(state, 2, 0);
+			const blockCoordsArray = this.getBlockCoords(this.currentBlock.x, this.currentBlock.y, this.currentBlock.blockType, newDirection);
+			const isMovePossible = !this.checkIfBlockStop(state, blockCoordsArray);
+			if (isMovePossible) {
+				this.currentBlock.direction = newDirection;
+				for (let i=0; i<blockCoordsArray.length; i++) {
+					const x = blockCoordsArray[i][0];
+					const y = blockCoordsArray[i][1];
+					if (y >= 0) state[y][x] = 2;
+				}
+				this.setState(state);
+			}
+		}
+
+		keydownHandler(e) {
+			if (e.code === 'KeyA') {
+				this.moveHorizontally(-1);
+			} else if (e.code === 'KeyD') {
+				this.moveHorizontally(1);
+			} else if (e.code === 'KeyS') {
+				if (this.timeout !== null) {
+					clearTimeout(this.timeout);
+					this.timeout = null;
+				}
+				this.moveDown();
+			} else if (e.code === 'KeyW') {
+				this.rotate();
+			}
+		}
+
+		play() {
+			document.addEventListener('keydown', this.keydownHandler);
+			this.initState();
+			this.newBlock();
+		}
+	}
+
+</script>
+</body>
+</html>
