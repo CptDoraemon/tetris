@@ -220,27 +220,25 @@
 			return copiedArray;
 		}
 
-		isLastRowFull() {
-			let isFull = true;
-			this.state[this.state.length - 1].map(i => {
-				if (i === 0) isFull = false;
-				return
-			});
-			return isFull;
-		}
-
 		checkIfScore() {
-			if(this.isLastRowFull()) {
-				const state = this.copyDeepArray(this.state);
-				state.pop();
-				state.unshift([]);
-				for (let i=0; i<this.layout.dimensionX; i++) {
-					state[0].push(0);
+			const state = this.copyDeepArray(this.state);
+
+			for (let y=0; y<this.layout.dimensionY; y++) {
+				let isFull = true;
+				for (let x=0; x<this.layout.dimensionX; x++) {
+					if (state[y][x] === 0) isFull = false;
 				}
-				this.setState(state);
-				this.score++;
-				console.log(this.score);
-				this.checkIfScore();
+				if (isFull) {
+					state.splice(y, 1);
+					state.unshift([]);
+					for (let i=0; i<this.layout.dimensionX; i++) {
+						state[0].push(0);
+					}
+
+					this.setState(state);
+					this.score++;
+					console.log(this.score);
+				}
 			}
 		}
 
