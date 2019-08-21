@@ -6,4 +6,4 @@ You know what's Tetris.
 w: rotate\
 a: move left\
 d: move right\
-s: move down\
+s: move down
