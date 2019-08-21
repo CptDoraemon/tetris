@@ -115,7 +115,7 @@
 			this.currentBlock.x = Math.floor(this.layout.dimensionX * 0.5);
 			this.currentBlock.y = 0;
 			this.currentBlock.blockType = Math.floor(Math.random() * 4);
-			this.currentBlock.direction = 0;
+			this.currentBlock.direction = Math.floor(Math.random() * 3);
 
 			this.moveDown();
 		}
